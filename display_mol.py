@@ -50,6 +50,12 @@ BOND_LENGTHS = {
     (9, 9): [('single', 142)],
 }
 
+def mol_to_dict(mol):
+    return {"N" : mol[1].shape[0],
+            'coords': mol[0].numpy(),
+            'elements': mol[1].numpy(),
+            'charges': mol[2].numpy()}
+
 
 def get_bond_type(element1, element2, distance_angstrom):
     """
@@ -73,10 +79,14 @@ def get_bond_type(element1, element2, distance_angstrom):
     
     # Trouver le type de liaison le plus proche
     bonds = BOND_LENGTHS[key]
-    tolerance = 9  # pm de tolérance
+    tolerance = {
+        'single' : 10,
+        'double' : 5,
+        'triple' : 3,
+    }  # pm de tolérance
     
     for bond_type, ref_length in bonds:
-        if abs(distance_pm - ref_length) < tolerance:
+        if distance_pm < ref_length + tolerance[bond_type]:
             # Retourner style selon le type
             if bond_type == 'single':
                 return ('simple', 'black', 2.0)
@@ -248,6 +258,7 @@ def plot_molecule(molecule, title="Molécule", show_charges=False, figsize=(10, 
     ax.legend(by_label.values(), by_label.keys(), loc='upper right')
     
     # Aspect ratio égal pour une meilleure visualisation
+    """
     max_range = np.array([coords[:, 0].max() - coords[:, 0].min(),
                          coords[:, 1].max() - coords[:, 1].min(),
                          coords[:, 2].max() - coords[:, 2].min()]).max() / 2.0
@@ -259,7 +270,8 @@ def plot_molecule(molecule, title="Molécule", show_charges=False, figsize=(10, 
     ax.set_xlim(mid_x - max_range, mid_x + max_range)
     ax.set_ylim(mid_y - max_range, mid_y + max_range)
     ax.set_zlim(mid_z - max_range, mid_z + max_range)
-    
+    """
+    ax.set_aspect('equal')
     plt.tight_layout()
     return fig, ax
 
