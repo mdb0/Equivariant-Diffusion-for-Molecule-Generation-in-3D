@@ -5,7 +5,7 @@ import numpy as np
 import urllib
 import tarfile
 import os
-import tensorflow as tf
+import torch
 
 def qm9_prepare_molecule(lines):
     pt = {"C": 6, "H": 1, "O": 8, "N": 7, "F": 9}
@@ -59,22 +59,22 @@ def qm9_fetch(num_molecules = 133885):
 
 
 #########################################################################################################################
-# store QM9 as tf datset for faster reloading
+# store QM9 as torch datset for faster reloading
 #########################################################################################################################
-def qm9_prepare_molecule_tf(lines):
+def qm9_prepare_molecule_torch(lines):
     """Parse one molecule from QM9 .xyz lines."""
     pt = {"C": 6, "H": 1, "O": 8, "N": 7, "F": 9}
     N = int(lines[0])
     atoms = [line.split() for line in lines[2:N + 2]]
-    elements = [pt[a[0]] for a in atoms]
-    data = np.array([[float(x.replace('*^', 'e')) for x in a[1:]] for a in atoms])
-    coords = data[:, :3].astype(np.float32)
-    charges = data[:, 3].astype(np.float32)
-    return coords, np.array(elements, dtype=np.int64), charges
+    elements = torch.tensor([pt[a[0]] for a in atoms], dtype=torch.int64)
+    data = torch.tensor([[float(x.replace('*^', 'e')) for x in a[1:]] for a in atoms], dtype=torch.float64)
+    coords = data[:, :3]
+    charges = data[:, 3]
+    return coords, elements, charges
 
 
-def qm9_to_tfdata(num_molecules=None):
-    save_path="./data/QM9/qm9_tfdata"
+def qm9_to_torch(num_molecules=None):
+    save_path="./data/QM9/qm9_torch.pt"
     raw_file = "./data/QM9/qm9.tar.bz2"
     qm9_url = "https://ndownloader.figshare.com/files/3195389"
 
@@ -87,43 +87,27 @@ def qm9_to_tfdata(num_molecules=None):
         print("Using existing archive:", raw_file)
 
     # 2. Define generator that streams directly from archive
-    def gen():
-        with tarfile.open(raw_file, "r:bz2") as tar:
-            members = sorted(
-                [m for m in tar.getnames() if m.startswith("dsgdb9nsd_") and m.endswith(".xyz")]
-            )
-            if num_molecules:
-                members = members[:num_molecules]
+    mols_torch = []
+    with tarfile.open(raw_file, "r:bz2") as tar:
+        members = sorted(
+            [m for m in tar.getnames() if m.startswith("dsgdb9nsd_") and m.endswith(".xyz")]
+        )
+        if num_molecules:
+            members = members[:num_molecules]
 
-            for i, name in enumerate(members, 1):
-                if i % 100 == 0:
-                    print(f"\rParsed {i}/{len(members)} molecules", end="", flush=True)
-                try:
-                    f = tar.extractfile(name)
-                    if f is None:
-                        continue
-                    lines = f.read().decode("utf-8").splitlines()
-                    coords, elements, charges = qm9_prepare_molecule_tf(lines)
-                    yield coords, elements, charges
-                except Exception as e:
-                    print(f"\nSkipping molecule {name}: {e}")
-                    continue
+        for i, name in enumerate(members, 1):
+            if i % 100 == 0:
+                print(f"\rParsed {i}/{len(members)} molecules", end="", flush=True)
+            
+            f = tar.extractfile(name)
+            lines = f.read().decode("utf-8").splitlines()
+            mols_torch += [qm9_prepare_molecule_torch(lines)]
 
-    # 3. Build TensorFlow dataset directly from the generator
-    output_signature = (
-        tf.TensorSpec(shape=(None, 3), dtype=tf.float32),
-        tf.TensorSpec(shape=(None,), dtype=tf.int64),
-        tf.TensorSpec(shape=(None,), dtype=tf.float32),
-    )
-
-    ds = tf.data.Dataset.from_generator(gen, output_signature=output_signature)
-
-    # Optional: Save for later use
-    tf.data.Dataset.save(ds, save_path)
-    print(f"\nSaved TensorFlow dataset to {save_path}")
-    return ds
+    torch.save(mols_torch, save_path)
+    print(f"\nSaved torch list to {save_path}")
 
 
-def qm9_load_tfdata(save_path="./data/QM9/qm9_tfdata"):
+
+def qm9_load_torch(save_path="./data/QM9/qm9_torch.pt"):
     """Reload previously saved QM9 TensorFlow dataset."""
-    return tf.data.Dataset.load(save_path)
+    return torch.load(save_path)
