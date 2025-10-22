@@ -66,8 +66,8 @@ def qm9_prepare_molecule_torch(lines):
     pt = {"C": 6, "H": 1, "O": 8, "N": 7, "F": 9}
     N = int(lines[0])
     atoms = [line.split() for line in lines[2:N + 2]]
-    elements = torch.tensor([pt[a[0]] for a in atoms], dtype=torch.int64)
-    data = torch.tensor([[float(x.replace('*^', 'e')) for x in a[1:]] for a in atoms], dtype=torch.float64)
+    elements = torch.tensor([pt[a[0]] for a in atoms], dtype=torch.int)
+    data = torch.tensor([[float(x.replace('*^', 'e')) for x in a[1:]] for a in atoms], dtype=torch.float)
     coords = data[:, :3]
     charges = data[:, 3]
     return coords, elements, charges
